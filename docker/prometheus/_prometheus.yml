@@ -1,0 +1,71 @@
+global:
+  scrape_interval: 1m # The default is every 1 minute.
+  evaluation_interval: 1m # Evaluate rules. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+  external_labels:
+    region: eu-central
+    environment: "$(AWS_ACCOUNT_ALIAS)"
+    product: "$(PRODUCT)"
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - scheme: https
+      basic_auth:
+        username: "Prometheus"
+        password: "$(BASIC_AUTH)"
+      static_configs:
+        - targets: ["alertmanager.blabla.app"]
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  - rules/rules_prometheus.yml
+  - rules/rules_loki.yml
+  - rules/rules_ecs.yml
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # - job_name: "pushgateway"
+  #   scheme: "http"
+  #   static_configs:
+  #     - targets: ["pushgateway.%%%AWS_ACCOUNT_ALIAS%%%.app:9091"]
+
+  # scrape ECS targets discovered by our sidecar
+  - job_name: "ECS"
+    file_sd_configs:
+      - files:
+          - /output/ecs_file_sd.yml
+        refresh_interval: 1m
+
+  # the cloudwatch exporter
+  - job_name: "yace"
+    static_configs:
+      - targets: ["yace.$(PRODUCT)-prometheus.local:5000"]
+
+  # Thanos components
+  - job_name: thanos-sidecar
+    static_configs:
+      - targets:
+          - "localhost:10903"
+
+  - job_name: thanos-store
+    static_configs:
+      - targets:
+          - "thanos-store.$(PRODUCT)-prometheus.local:10902"
+
+  - job_name: thanos-query
+    static_configs:
+      - targets:
+          - "thanos-query.$(PRODUCT)-prometheus.local:9090"
+
+  # Loki metrics
+  - job_name: loki
+    static_configs:
+      - targets:
+          - "loki.loki.local:3100"
